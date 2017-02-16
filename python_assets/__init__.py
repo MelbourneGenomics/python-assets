@@ -86,20 +86,26 @@ def unpack_into(url: str, path: os.PathLike, extract=True, compression=None, arc
 
     # Do the extraction
     if extract:
-        # Write the download to a temporary file
-        temp_download = tempfile.NamedTemporaryFile(delete=False)
-        shutil.copyfileobj(response.raw, temp_download)
-        shutil.unpack_archive(temp_download.name, str(path), evaluation.combined)
-    else:
-        filename = get_response_filename(response)
-        shutil.copyfileobj(response.raw, path / filename)
 
-    # Do the move_root (see the docstring above)
-    if move_root:
-        files = list(path.iterdir())
-        if len(files) == 1 and files[0].is_dir():
-            lone_dir = files[0]
-            for subfile in lone_dir.iterdir():
-                subfile.rename(path / subfile.name)
-            lone_dir.rmdir()
+        # Write the download to a temporary file
+        with tempfile.NamedTemporaryFile(delete=False) as temp_download:
+            shutil.copyfileobj(response.raw, temp_download)
+
+        # Unpack the download into the target directory
+        shutil.unpack_archive(temp_download.name, str(path), evaluation.combined)
+
+        # Do the move_root (see the docstring above)
+        if move_root:
+            files = list(path.iterdir())
+            if len(files) == 1 and files[0].is_dir():
+                lone_dir = files[0]
+                for subfile in lone_dir.iterdir():
+                    subfile.rename(path / subfile.name)
+                lone_dir.rmdir()
+
+    else:
+        # If we're not extracting, just copy the file into the target directory
+        filename = get_response_filename(response)
+        with (path / filename).open('wb') as dest:
+            shutil.copyfileobj(response.raw, dest)
 
