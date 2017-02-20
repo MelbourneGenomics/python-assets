@@ -76,6 +76,7 @@ def unpack_into(url: str, path: os.PathLike, extract=True, compression=None, arc
 
     # Do the download
     response = requests.get(url, stream=True)
+    response.raise_for_status()
 
     # Work out what type of compression it has, overriding with user recommendations
     evaluation = CompressionEvaluation(response)
