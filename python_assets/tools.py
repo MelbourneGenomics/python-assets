@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 
@@ -14,3 +15,14 @@ def move_root(path: Path):
         for subfile in lone_dir.iterdir():
             subfile.rename(path / subfile.name)
         lone_dir.rmdir()
+
+
+def sh(command, **kwargs):
+    if isinstance(command, str):
+        # If it's a shell command, enable the shell and ensure `set -e`
+        kwargs['shell'] = True
+        command = 'set -e\n' + command
+    else:
+        kwargs['shell'] = False
+
+    subprocess.check_call(command, **kwargs)
