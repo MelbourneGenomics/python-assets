@@ -1,7 +1,7 @@
 import pathlib
 from multiprocessing import Pipe
-
-from python_assets.asset import Asset
+from pkg_resources import resource_string
+from python_assets.core.asset import Asset
 import typing
 import multiprocessing
 
@@ -25,6 +25,10 @@ class Bundle:
         if assets is not None:
             for asset in assets:
                 self.add_asset(asset)
+
+    def generate_environment(self):
+        env_file = self.directory / 'environment'
+        env_file.write_bytes(resource_string('python_assets', 'environment.sh'))
 
     def add_asset(self, asset: Asset):
         """
@@ -63,12 +67,14 @@ class Bundle:
 
         self.order.append(node)
 
-    def install(self):
+    def install(self, create_env: bool = False):
         """
         Runs the install process
         """
         self.build_queue()
         self.execute_available()
+        if create_env:
+            self.generate_environment()
 
     def execute_available(self):
         """
@@ -100,12 +106,10 @@ class Bundle:
             else:
                 # Wait for them all to complete
                 for node, (process, parent) in list(executing.items()):
-
                     # Wait for this process to complete
                     process.join()
 
                     # When it does, read the start, finish times
-                    # TODO: don't block if no data was sent
                     node.piped = parent.recv()
 
                     # Update its dependent tasks

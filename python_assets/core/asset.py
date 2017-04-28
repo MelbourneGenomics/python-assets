@@ -8,7 +8,7 @@ import multiprocessing
 import multiprocessing.connection
 
 import python_assets.tools
-import python_assets.bundle
+import python_assets.core.bundle
 
 def extract_asset(download_func, strip_root=True):
     """
@@ -155,11 +155,14 @@ class Asset:
         """
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
+            return_dict = {}
             self.directory.mkdir(exist_ok=True, parents=True)
-            self.download(temp_path, pipe)
-            self.install(temp_path, pipe)
+            self.download(temp_path, return_dict)
+            self.install(temp_path, return_dict)
 
-    def download(self, download_dir: Path, pipe: multiprocessing.connection.Connection):
+            pipe.send(return_dict)
+
+    def download(self, download_dir: Path, return_dict: dict):
         """
         Download the asset. This should be a process that remains platform-independent (no compilation etc).
             Should return the path to the asset itself (which will be inside the download_dir)
@@ -167,7 +170,7 @@ class Asset:
         """
         pass
 
-    def install(self, download_dir: Path, pipe: multiprocessing.connection.Connection):
+    def install(self, download_dir: Path, return_dict: dict):
         """
         Install the asset. This can be platform dependent.
         :return:

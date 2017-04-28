@@ -4,12 +4,12 @@ import tempfile
 import multiprocessing
 import multiprocessing.connection
 
-import asset
 import subprocess
 import time
 import datetime
 import shutil
 
+from python_assets.core import asset
 
 class TimeInterval:
     """Represents the difference between two datetimes"""
@@ -27,12 +27,14 @@ class GraphAsset(asset.Asset):
     def __init__(self):
         super().__init__(tempfile.mkdtemp())
 
-    def install(self, download_dir, pipe: multiprocessing.connection.Connection):
+    def install(self, download_dir, return_dict: dict):
+
+        # Time when this starts and finishes, and send that
         start = datetime.datetime.now()
         time.sleep(1)
         finish = datetime.datetime.now()
 
-        pipe.send(TimeInterval(start, finish))
+        return_dict['time'] = TimeInterval(start, finish)
 
     def is_overlap(self, b: 'GraphAsset'):
         """Returns True if this asset overlapped in execution time with another asset"""
@@ -41,10 +43,10 @@ class GraphAsset(asset.Asset):
         for a, b in [[self, b], [b, self]]:
 
             # Take all points in tuple A
-            for point in [a.piped.start, a.piped.finish]:
+            for point in [a.piped['time'].start, a.piped['time'].finish]:
 
                 # If that point is within B, there is overlap
-                if b.piped.start <= point <= b.piped.finish:
+                if b.piped['time'].start <= point <= b.piped['time'].finish:
                     return True
 
         return False
@@ -81,8 +83,8 @@ class TarAsset(asset.Asset):
 
     def download(self, download_dir: pathlib.Path, pipe: multiprocessing.connection.Connection):
         """Emulate a download by copying the tar executable from the system"""
-        tar = subprocess.check_output('which tar', shell=True, executable='/bin/bash')
-        shutil.copy(tar, self.directory)
+        tar = subprocess.check_output('which tar', shell=True, executable='/bin/bash').decode().strip()
+        shutil.copy(tar, download_dir)
 
     def install(self, download_dir: pathlib.Path, pipe: multiprocessing.connection.Connection):
         shutil.copy(download_dir / 'tar', self.directory)

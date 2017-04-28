@@ -1,7 +1,8 @@
 import tempfile
 import unittest
 import pathlib
-from python_assets import bundle, scripts
+from python_assets import scripts
+from python_assets.core.bundle import Bundle
 import datetime
 
 from python_assets.test import GzipAsset, TarAsset, GraphAsset, TimeInterval
@@ -14,32 +15,40 @@ class Overlap(unittest.TestCase):
 
     def test_is_overlap(self):
         a = GraphAsset()
-        a.piped = TimeInterval(
-            start=datetime.datetime(year=1, **self.params),
-            finish=datetime.datetime(year=10, **self.params)
-        )
+        a.piped = {
+            'time': TimeInterval(
+                start=datetime.datetime(year=1, **self.params),
+                finish=datetime.datetime(year=10, **self.params)
+            )
+        }
 
         b = GraphAsset()
-        b.piped = TimeInterval(
-            start=datetime.datetime(year=5, **self.params),
-            finish=datetime.datetime(year=15, **self.params)
-        )
+        b.piped = {
+            'time': TimeInterval(
+                start=datetime.datetime(year=5, **self.params),
+                finish=datetime.datetime(year=15, **self.params)
+            )
+        }
 
         self.assertTrue(a.is_overlap(b))
         self.assertTrue(b.is_overlap(a))
 
     def test_no_overlap(self):
         a = GraphAsset()
-        a.piped = TimeInterval(
-            start=datetime.datetime(year=1, **self.params),
-            finish=datetime.datetime(year=10, **self.params)
-        )
+        a.piped = {
+            'time': TimeInterval(
+                start=datetime.datetime(year=1, **self.params),
+                finish=datetime.datetime(year=10, **self.params)
+            )
+        }
 
         b = GraphAsset()
-        b.piped = TimeInterval(
-            start=datetime.datetime(year=15, **self.params),
-            finish=datetime.datetime(year=20, **self.params)
-        )
+        b.piped = {
+            'time': TimeInterval(
+                start=datetime.datetime(year=15, **self.params),
+                finish=datetime.datetime(year=20, **self.params)
+            )
+        }
 
         self.assertFalse(a.is_overlap(b))
         self.assertFalse(b.is_overlap(a))
@@ -50,15 +59,15 @@ class TarBundle(unittest.TestCase):
     tar = TarAsset()
     gzip = GzipAsset()
 
-    bundle = bundle.Bundle(root, [
+    bundle = Bundle(root, [
         tar,
         gzip
     ])
 
     def test_installs(self):
         self.bundle.install()
-        self.assertGreater(len(list(self.tar.directory)), 0)
-        self.assertGreater(len(list(self.gzip.directory)), 0)
+        self.assertGreater(len(list(self.tar.directory.iterdir())), 0)
+        self.assertGreater(len(list(self.gzip.directory.iterdir())), 0)
 
 
 class AssetFile(unittest.TestCase):
@@ -114,7 +123,7 @@ class Graph(unittest.TestCase):
         c = self.C()
         d = self.D()
 
-        bun = bundle.Bundle([
+        bun = Bundle(tempfile.mkdtemp(), [
             a,
             b,
             c,
