@@ -1,18 +1,25 @@
-import networkx as nx
-from asset import Asset
-import queue
+import pathlib
+from multiprocessing import Pipe
+
+from python_assets.asset import Asset
 import typing
 import multiprocessing
 
 
 class Bundle:
-    queue: list
-    graph: nx.DiGraph
+    order: typing.List[Asset]
+    """A queue of assets to install, where the last item in the list is the first to be installed"""
 
-    def __init__(self, assets: typing.Iterable[Asset] = None):
-        # Initialise state
-        self.queue = []
-        self.graph = nx.DiGraph()
+    assets: typing.Dict[str, Asset]
+    """A dictionary of all assets in this bundle, mapping asset id to asset object"""
+
+    directory: pathlib.Path
+    """The root of the asset bundle. All assets are installed relative to here."""
+
+    def __init__(self, directory: pathlib.Path, assets: typing.Iterable[Asset] = None):
+        self.order = []
+        self.assets = {}
+        self.directory = directory
 
         # Add assets
         if assets is not None:
@@ -20,52 +27,89 @@ class Bundle:
                 self.add_asset(asset)
 
     def add_asset(self, asset: Asset):
-        # Add both functions as nodes
-        node = asset.id
-        self.graph.add_node(node, asset=asset)
+        """
+        Add an asset to the bundle
+        :param asset:
+        """
+        # Add the asset node
+        self.assets[asset.id] = asset
 
-        for dependency in asset.dependencies:
-            self.graph.add_edge(dependency, node)
+        # Tell the asset about this bundle
+        asset.bundle = self
 
     def build_queue(self):
-        self.queue = nx.algorithms.topological_sort(self.graph, reverse=True)
+        """
+        Internal method. Adds edges to the nodes and builds a topographically sorted list of edges
+        """
+        # Add the graph edges
+        for id, asset in self.assets.items():
+            for dependency_id in asset.dependency_ids:
+                dependency = self.assets[dependency_id]
+                dependency.add_dependent(asset)
+
+        # Topological sort to produce a list of jobs
+        for id, asset in self.assets.items():
+            self.visit_node(asset)
+
+    def visit_node(self, node: Asset):
+        """Internal method. Used in topographically sorting the asset nodes"""
+        if node.visited:
+            return
+
+        node.visited = True
+
+        for dependent in node.dependents:
+            self.visit_node(dependent)
+
+        self.order.append(node)
 
     def install(self):
         """
         Runs the install process
-        :return:
         """
         self.build_queue()
         self.execute_available()
 
     def execute_available(self):
         """
-        Runs a subprocess for each available task
-        :return:
+        Internal method. Runs a subprocess for each available task
         """
         executing = {}
 
-        while self.queue:
-            while self.queue:
-                # Get the last element (the first in the queue)
-                tail = self.queue[-1]
+        # Keep looping until everything is done
+        while self.order or executing:
 
-                # If there no dependencies to go, run this task
-                if self.graph.predecessors(tail):
-                    break
-                else:
-                    # Remove it from the queue since we know we're about to run it
-                    self.queue.pop()
+            # If the last element in the array has no dependencies to go, run this task
+            if self.order and self.order[-1].deps_satisfied:
 
-                    # Run the process
-                    p = multiprocessing.Process(target=self.graph.node[tail]['asset'].execute)
-                    p.start()
+                # Remove it from the queue since we know we're about to run it
+                tail = self.order.pop()
 
-                    # Keep track of the node associated with the process
-                    executing[tail] = p
+                # Provide a communication channel
+                parent, child = Pipe()
 
-            # Wait for them all to complete
-            for node, process in list(executing.items()):
-                process.join()
-                del executing[node]
-                self.graph.remove_node(node)
+                # Run the process
+                proc = multiprocessing.Process(target=tail.execute, args=(child,))
+
+                proc.start()
+
+                # Keep track of the node associated with the process
+                executing[tail] = (proc, parent)
+
+            # Otherwise if we've started all the assets we can, just wait for them to complete
+            else:
+                # Wait for them all to complete
+                for node, (process, parent) in list(executing.items()):
+
+                    # Wait for this process to complete
+                    process.join()
+
+                    # When it does, read the start, finish times
+                    # TODO: don't block if no data was sent
+                    node.piped = parent.recv()
+
+                    # Update its dependent tasks
+                    node.complete()
+
+                    # Stop tracking it
+                    del executing[node]
