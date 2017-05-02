@@ -1,5 +1,10 @@
 import pathlib
 from multiprocessing import Pipe
+
+import sys
+import time
+from progress.spinner import Spinner, PixelSpinner
+import itertools
 from pkg_resources import resource_string
 from python_assets.core.asset import Asset
 import typing
@@ -7,7 +12,7 @@ import multiprocessing
 
 
 class Bundle:
-    order: typing.List[Asset]
+    queue: typing.List[Asset]
     """A queue of assets to install, where the last item in the list is the first to be installed"""
 
     assets: typing.Dict[str, Asset]
@@ -16,8 +21,8 @@ class Bundle:
     directory: pathlib.Path
     """The root of the asset bundle. All assets are installed relative to here."""
 
-    def __init__(self, directory: pathlib.Path, assets: typing.Iterable[Asset] = None):
-        self.order = []
+    def __init__(self, assets: typing.Iterable[Asset] = None, directory: pathlib.Path = pathlib.Path('tools')):
+        self.queue = []
         self.assets = {}
         self.directory = directory
 
@@ -27,6 +32,7 @@ class Bundle:
                 self.add_asset(asset)
 
     def generate_environment(self):
+        """Write an environment shell script into the install directory"""
         env_file = self.directory / 'environment'
         env_file.write_bytes(resource_string('python_assets', 'environment.sh'))
 
@@ -45,14 +51,20 @@ class Bundle:
         """
         Internal method. Adds edges to the nodes and builds a topographically sorted list of edges
         """
-        # Add the graph edges
+
+        # Iterate over assets
         for id, asset in self.assets.items():
-            for dependency_id in asset.dependency_ids:
+            # Skip if already complete
+            if asset.is_complete:
+                print(f"Skipping {asset.id}", file=sys.stderr)
+                continue
+
+            # Add the graph edges
+            for dependency_id in asset.requires:
                 dependency = self.assets[dependency_id]
                 dependency.add_dependent(asset)
 
-        # Topological sort to produce a list of jobs
-        for id, asset in self.assets.items():
+            # Topological sort to produce a list of jobs
             self.visit_node(asset)
 
     def visit_node(self, node: Asset):
@@ -65,16 +77,27 @@ class Bundle:
         for dependent in node.dependents:
             self.visit_node(dependent)
 
-        self.order.append(node)
+        self.queue.append(node)
 
     def install(self, create_env: bool = False):
         """
         Runs the install process
         """
+        # If the root directory doesn't exist, create it
+        self.directory.mkdir(exist_ok=True, parents=True)
+
         self.build_queue()
         self.execute_available()
         if create_env:
             self.generate_environment()
+
+    def list(self):
+        """
+        Shows the asset queue
+        """
+        self.build_queue()
+        for i, item in enumerate(self.queue):
+            print(f'#{i+1}: {item.id}')
 
     def execute_available(self):
         """
@@ -83,13 +106,13 @@ class Bundle:
         executing = {}
 
         # Keep looping until everything is done
-        while self.order or executing:
+        while self.queue or executing:
 
             # If the last element in the array has no dependencies to go, run this task
-            if self.order and self.order[-1].deps_satisfied:
+            if self.queue and self.queue[-1].deps_satisfied:
 
                 # Remove it from the queue since we know we're about to run it
-                tail = self.order.pop()
+                tail = self.queue.pop()
 
                 # Provide a communication channel
                 parent, child = Pipe()
@@ -106,8 +129,14 @@ class Bundle:
             else:
                 # Wait for them all to complete
                 for node, (process, parent) in list(executing.items()):
+
+                    # Show a spinner for each task
+                    spinner = PixelSpinner(f'• {node.id} ')
+
                     # Wait for this process to complete
-                    process.join()
+                    while process.is_alive():
+                        spinner.next()
+                        time.sleep(0.1)
 
                     # When it does, read the start, finish times
                     node.piped = parent.recv()

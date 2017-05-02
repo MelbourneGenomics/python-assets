@@ -1,4 +1,5 @@
 import subprocess
+import typing
 from pathlib import Path
 
 
@@ -17,7 +18,20 @@ def move_root(path: Path):
         lone_dir.rmdir()
 
 
-def sh(command, **kwargs):
+def sh_add_outputs(command, return_dict: dict, dict_key: str, **kwargs):
+    """
+    Runs a command and stores the stderr and stdout from the process in the dictionary in key
+    """
+    stdout, stderr = sh(command, **kwargs)
+    return_dict[dict_key]['stderr'] = stderr
+    return_dict[dict_key]['stdout'] = stdout
+
+
+def sh(command, **kwargs) -> dict:
+    """"
+    Runs a command as a subprocess. Captures the stdout and stderr and returns them as a tuple
+    """
+
     if isinstance(command, str):
         # If it's a shell command, enable the shell and ensure `set -e`
         kwargs['shell'] = True
@@ -25,4 +39,8 @@ def sh(command, **kwargs):
     else:
         kwargs['shell'] = False
 
-    subprocess.check_call(command, **kwargs)
+    proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
+    return {
+        'sdtout': proc.stdout,
+        'stderr': proc.stderr
+    }

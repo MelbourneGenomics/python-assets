@@ -1,6 +1,7 @@
 import os
 import shutil
 import tempfile
+import re
 import typing
 from pathlib import Path
 
@@ -9,6 +10,8 @@ import multiprocessing.connection
 
 import python_assets.tools
 import python_assets.core.bundle
+from python_assets.core.version import Provision, Dependency, Version
+
 
 def extract_asset(download_func, strip_root=True):
     """
@@ -61,7 +64,6 @@ def extract_asset(download_func, strip_root=True):
 #         elif isinstance(dependency, type[Asset]):
 #             self.dependency = (dependency, Stage.INSTALL)
 
-
 class Asset:
     """
     Base class used for assets. Child classes should implement the download and install methods
@@ -84,10 +86,10 @@ class Asset:
     piped: typing.Any
     """Arbitrary data that was returned from the process"""
 
-    bundle: 'python_assets.bundle.Bundle'
+    bundle: 'python_assets.core.bundle.Bundle'
     """The parent bundle"""
 
-    def __init__(self, directory: os.PathLike = None):
+    def __init__(self, directory: os.PathLike = ''):
         self._directory = Path(directory)
         self.dependencies = 0
         self.dependents = []
@@ -139,10 +141,18 @@ class Asset:
         Any hashable object that can be used to identify the Asset. Can include a version etc
         :return:
         """
-        return self.__class__
+        return re.sub('asset', '', self.__class__.__name__, flags=re.IGNORECASE)
 
     @property
-    def dependency_ids(self) -> typing.Iterable[typing.Hashable]:
+    def provides(self) -> typing.Iterable[Provision]:
+        """
+        A list of dependencies that this satisfies
+        :return:
+        """
+        return []
+
+    @property
+    def requires(self) -> typing.Iterable[Dependency]:
         """
         Returns a list of IDs of assets that need to be installed before this can run
         :return:
@@ -162,6 +172,11 @@ class Asset:
 
             pipe.send(return_dict)
 
+    @property
+    def is_complete(self) -> bool:
+        """Returns true if this asset is already installed"""
+        pass
+
     def download(self, download_dir: Path, return_dict: dict):
         """
         Download the asset. This should be a process that remains platform-independent (no compilation etc).
@@ -173,17 +188,34 @@ class Asset:
     def install(self, download_dir: Path, return_dict: dict):
         """
         Install the asset. This can be platform dependent.
+        :param return_dict A dictionary for all data you want to save from this installation process.
         :return:
         """
         pass
 
 
 class VersionedAsset(Asset):
-    version: str
+    version: Version
 
-    def __init__(self, version: str, **kwargs):
+    def __init__(self, version: Version, **kwargs):
         self.version = version
         super().__init__(**kwargs)
+
+
+class NamedAsset(VersionedAsset):
+    def __init__(self, name: str, version: str):
+        self.name = name
+        super().__init__(version)
+
+    def id(self):
+        return f'{self.name}@{self.version}'
+
+
+class GroupAsset(Asset):
+    """
+    Represents a group of assets that shouldn't be installed separately, e.g. Python packages that might be
+        interdependent.
+    """
 
 # Stage = enum.Enum('stage', ['DOWNLOAD', 'INSTALL'])
 # Dependency = typing.namedtuple(

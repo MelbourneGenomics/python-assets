@@ -101,7 +101,7 @@ class Graph(unittest.TestCase):
             return 'c'
 
         @property
-        def dependency_ids(self):
+        def requires(self):
             return ['a']
 
     class D(GraphAsset):
@@ -113,7 +113,7 @@ class Graph(unittest.TestCase):
             return 'd'
 
         @property
-        def dependency_ids(self):
+        def requires(self):
             return ['c', 'b']
 
     def test_graph(self):

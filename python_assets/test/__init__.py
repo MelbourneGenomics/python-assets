@@ -78,7 +78,7 @@ class TarAsset(asset.Asset):
         super().__init__(pathlib.Path('bin'))
 
     @property
-    def dependency_ids(self):
+    def requires(self):
         return ['gzip']
 
     def download(self, download_dir: pathlib.Path, pipe: multiprocessing.connection.Connection):
