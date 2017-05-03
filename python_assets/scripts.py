@@ -41,10 +41,10 @@ def main():
     # Parse args
     parser = argparse.ArgumentParser(description='Installs assets needed by the python application')
     parser.add_argument('-d', '--dir', help='Root directory into which the assets will be installed',
-                        type=directory_path, default=here, required=False)
+                        type=directory_path, default=here / 'tools', required=False)
     parser.add_argument('-a', '--assetfile',
                         help='Path to the assetfile to use to determine which assets to install',
-                        type=file_path, required=False)
+                        type=file_path, default=here / 'assetfile.py', required=False)
     parser.set_defaults(command='install')
     subparsers = parser.add_subparsers(dest='command')
 
@@ -57,14 +57,9 @@ def main():
     # Do the parsing
     args = parser.parse_args()
 
-    # Process some args
-    if args.assetfile is None:
-        args.assetfile = args.dir / 'assetfile.py'
-
     # Load the bundle
     bundle = asset_bundle(args.assetfile)
-    if args.dir is not None:
-        bundle.directory = args.dir
+    bundle.directory = args.dir
 
     # Execute the commands
     if args.command == 'install' or args.command is None:

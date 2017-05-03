@@ -2,6 +2,7 @@ import os
 import typing
 from pathlib import Path
 from multiprocessing.connection import Connection
+import requirements
 
 from python_assets.core.asset import VersionedAsset, extract_asset, NamedAsset, Asset
 from python_assets.tools import sh
@@ -42,24 +43,39 @@ class Python2Asset(VersionedAsset):
 
 
 class PipAssetBundle(Asset):
-    def __init__(self, packages: typing.Union[Path, typing.Iterable[str]], directory: Path):
-        self.dep_arr = []
 
-        if os.path.exists(packages):
+    packages: set
+
+    """
+    Represents an set of pip packages as a single asset, since they can more efficiently be installed together
+    """
+    def __init__(self, packages: typing.Union[os.PathLike, typing.List[str]]):
+
+        if isinstance(packages, os.PathLike) and os.path.exists(packages):
+            self.packages = set()
             with packages.open('r') as f:
                 for line in f:
-                    self.dep_arr.append(line)
+                    self.packages.append(line)
         elif isinstance(packages, typing.List):
-            self.dep_arr = packages
+            self.packages = set(packages)
 
-        super().__init__(directory)
+        super().__init__()
+
+    @property
+    def packages_fmt(self):
+        return ' '.join([f"'{dep}'" for dep in self.packages])
 
     def download(self, download_dir: Path, return_dict: dict):
-        return_dict['download'] = sh(f'pip download -d {download_dir}, --no-binary')
+        return_dict['download'] = sh(f'python2 -m pip download -d {download_dir} --no-binary :all: {self.packages_fmt}')
 
     def install(self, download_dir: Path, return_dict: dict):
-        return_dict['install'] = sh(f'pip install --no-index --find-links={download_dir} {dep}')
+        return_dict['install'] = sh(f'python2 -m pip install --no-index --find-links={download_dir} {self.packages_fmt}')
 
+    @property
+    def is_complete(self):
+        deps = requirements.parse(sh('python2 -m pip freeze')['stdout'].decode())
+        dep_names = set([dep.name for dep in deps])
+        return self.packages.issubset(dep_names)
 
 class SamtoolsAsset(VersionedAsset):
     @extract_asset

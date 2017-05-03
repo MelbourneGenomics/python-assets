@@ -1,4 +1,5 @@
 import typing
+import re
 from typing import NamedTuple
 
 
@@ -42,3 +43,7 @@ class Provision(NamedTuple):
     """A dependency that an asset provides"""
     id: str
     version: Version
+
+    @staticmethod
+    def parse(raw: str):
+        re.search(r'\w')

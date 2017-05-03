@@ -21,7 +21,7 @@ class Bundle:
     directory: pathlib.Path
     """The root of the asset bundle. All assets are installed relative to here."""
 
-    def __init__(self, assets: typing.Iterable[Asset] = None, directory: pathlib.Path = pathlib.Path('tools')):
+    def __init__(self, assets: typing.Iterable[Asset] = None, directory: pathlib.Path = None):
         self.queue = []
         self.assets = {}
         self.directory = directory
@@ -54,10 +54,6 @@ class Bundle:
 
         # Iterate over assets
         for id, asset in self.assets.items():
-            # Skip if already complete
-            if asset.is_complete:
-                print(f"Skipping {asset.id}", file=sys.stderr)
-                continue
 
             # Add the graph edges
             for dependency_id in asset.requires:
@@ -97,7 +93,8 @@ class Bundle:
         """
         self.build_queue()
         for i, item in enumerate(self.queue):
-            print(f'#{i+1}: {item.id}')
+            box = '☑' if item.is_complete else '☐'
+            print(f'{box} {item.id}')
 
     def execute_available(self):
         """
@@ -112,7 +109,12 @@ class Bundle:
             if self.queue and self.queue[-1].deps_satisfied:
 
                 # Remove it from the queue since we know we're about to run it
-                tail = self.queue.pop()
+                tail: Asset = self.queue.pop()
+
+                # Skip if already complete
+                if tail.is_complete:
+                    print(f"Skipping {tail.id}", file=sys.stderr)
+                    continue
 
                 # Provide a communication channel
                 parent, child = Pipe()

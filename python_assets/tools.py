@@ -41,6 +41,6 @@ def sh(command, **kwargs) -> dict:
 
     proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
     return {
-        'sdtout': proc.stdout,
+        'stdout': proc.stdout,
         'stderr': proc.stderr
     }

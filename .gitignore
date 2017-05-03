@@ -1,4 +1,5 @@
 .idea
+python_assets/test/assetfile/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -16,7 +16,8 @@ setup(
         'progress',
         'requests',
         'networkx',
-        'wget'
+        'wget',
+        'requirements-parser'
     ],
     license="GPL"
 )
